@@ -26,7 +26,6 @@ import cn.kizzzy.toolkit.extrator.PlayThisTask;
 import cn.kizzzy.toolkit.view.AbstractView;
 import cn.kizzzy.vfs.IPackage;
 import cn.kizzzy.vfs.ITree;
-import cn.kizzzy.vfs.Separator;
 import cn.kizzzy.vfs.handler.BufferedImageHandler;
 import cn.kizzzy.vfs.handler.JsonFileHandler;
 import cn.kizzzy.vfs.handler.PkgFileHandler;
@@ -34,10 +33,8 @@ import cn.kizzzy.vfs.pack.FilePackage;
 import cn.kizzzy.vfs.pack.QqfoPackage;
 import cn.kizzzy.vfs.tree.IdGenerator;
 import cn.kizzzy.vfs.tree.Leaf;
-import cn.kizzzy.vfs.tree.LocalTree;
 import cn.kizzzy.vfs.tree.Node;
 import cn.kizzzy.vfs.tree.QqfoTreeBuilder;
-import cn.kizzzy.vfs.tree.Root;
 import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.event.ActionEvent;
@@ -210,14 +207,18 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
                 iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
                 
                 PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
-                Root<PkgFileItem> root = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
-                tree = new LocalTree<>(root, Separator.BACKSLASH_SEPARATOR_LOWERCASE);
+                
+                tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
                 
                 vfs = new QqfoPackage(file.getParent(), tree);
                 
                 Platform.runLater(() -> {
                     dummyTreeItem.getChildren().clear();
-                    dummyTreeItem.getChildren().add(new TreeItem<>(root));
+                    
+                    final List<Node<PkgFileItem>> nodes = tree.listNode(0);
+                    for (Node<PkgFileItem> node : nodes) {
+                        dummyTreeItem.getChildren().add(new TreeItem<>(node));
+                    }
                 });
                 
                 loadedKvs.put(file.getAbsolutePath(), file);

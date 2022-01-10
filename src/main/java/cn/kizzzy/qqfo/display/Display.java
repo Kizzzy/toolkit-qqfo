@@ -1,4 +1,4 @@
-package cn.kizzzy.display;
+package cn.kizzzy.qqfo.display;
 
 import cn.kizzzy.qqfo.GsoFileItem;
 

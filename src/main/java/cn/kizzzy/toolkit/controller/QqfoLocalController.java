@@ -1,8 +1,5 @@
 package cn.kizzzy.toolkit.controller;
 
-import cn.kizzzy.display.Display;
-import cn.kizzzy.display.DisplayContext;
-import cn.kizzzy.display.DisplayHelper;
 import cn.kizzzy.event.EventArgs;
 import cn.kizzzy.helper.FileHelper;
 import cn.kizzzy.helper.LogHelper;
@@ -21,6 +18,9 @@ import cn.kizzzy.qqfo.GsoFileItems;
 import cn.kizzzy.qqfo.PkgFile;
 import cn.kizzzy.qqfo.PkgFileItem;
 import cn.kizzzy.qqfo.QqfoConfig;
+import cn.kizzzy.qqfo.display.Display;
+import cn.kizzzy.qqfo.display.DisplayContext;
+import cn.kizzzy.qqfo.display.DisplayHelper;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
 import cn.kizzzy.toolkit.extrator.PlayThisTask;
 import cn.kizzzy.toolkit.view.AbstractView;
@@ -53,12 +53,9 @@ import javafx.stage.FileChooser;
 import java.awt.datatransfer.StringSelection;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.lang.reflect.Type;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.regex.Pattern;
 
@@ -109,7 +106,6 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     protected IPackage vfs;
     protected ITree<PkgFileItem> tree;
-    protected Map<String, File> loadedKvs = new HashMap<>();
     
     protected Display display = new Display();
     protected TreeItem<Node<PkgFileItem>> dummyTreeItem;
@@ -186,7 +182,7 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     protected void loadPackage(ActionEvent actionEvent) {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("选择idx文件");
+        chooser.setTitle("选择pkg文件");
         if (StringHelper.isNotNullAndEmpty(config.data_path)) {
             chooser.setInitialDirectory(new File(config.data_path));
         }
@@ -197,40 +193,34 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         if (file != null && file.getAbsolutePath().endsWith(".pkg")) {
             config.data_path = file.getParent();
             
-            if (loadedKvs.containsKey(file.getAbsolutePath())) {
-                LogHelper.info("pkg is loaded");
-                return;
-            }
-            
             new Thread(() -> {
-                IPackage iPackage = new FilePackage(file.getParent());
-                iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
-                
-                PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
-                
-                tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
-                
-                vfs = new QqfoPackage(file.getParent(), tree);
-                
-                Platform.runLater(() -> {
-                    dummyTreeItem.getChildren().clear();
-                    
-                    final List<Node<PkgFileItem>> nodes = tree.listNode(0);
-                    for (Node<PkgFileItem> node : nodes) {
-                        dummyTreeItem.getChildren().add(new TreeItem<>(node));
-                    }
-                });
-                
-                loadedKvs.put(file.getAbsolutePath(), file);
+                try {
+                    loadPkgImpl(file);
+                } catch (Exception e) {
+                    LogHelper.error("load pkg error", e);
+                }
             }).start();
         }
     }
     
-    protected Object leaf2file(String path, Type clazz) {
-        if (vfs != null) {
-            return vfs.load(path, clazz);
-        }
-        return null;
+    private void loadPkgImpl(File file) {
+        IPackage iPackage = new FilePackage(file.getParent());
+        iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
+        
+        PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
+        
+        tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
+        
+        vfs = new QqfoPackage(file.getParent(), tree);
+        
+        Platform.runLater(() -> {
+            dummyTreeItem.getChildren().clear();
+            
+            final List<Node<PkgFileItem>> nodes = tree.listNode(0);
+            for (Node<PkgFileItem> node : nodes) {
+                dummyTreeItem.getChildren().add(new TreeItem<>(node));
+            }
+        });
     }
     
     @Override

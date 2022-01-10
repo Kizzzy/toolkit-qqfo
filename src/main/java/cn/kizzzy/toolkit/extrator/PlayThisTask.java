@@ -1,6 +1,6 @@
 package cn.kizzzy.toolkit.extrator;
 
-import cn.kizzzy.display.Display;
+import cn.kizzzy.qqfo.display.Display;
 import cn.kizzzy.helper.LogHelper;
 
 import java.util.List;

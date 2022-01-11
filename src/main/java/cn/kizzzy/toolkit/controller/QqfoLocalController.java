@@ -48,6 +48,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 
 import java.awt.datatransfer.StringSelection;
@@ -184,7 +185,10 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         FileChooser chooser = new FileChooser();
         chooser.setTitle("选择pkg文件");
         if (StringHelper.isNotNullAndEmpty(config.data_path)) {
-            chooser.setInitialDirectory(new File(config.data_path));
+            File lastFolder = new File(config.data_path);
+            if (lastFolder.exists()) {
+                chooser.setInitialDirectory(lastFolder);
+            }
         }
         chooser.getExtensionFilters().addAll(
             new FileChooser.ExtensionFilter("PKG", "*.pkg")
@@ -332,14 +336,19 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     @FXML
     protected void exportFile(ActionEvent event) {
-        if (StringHelper.isNullOrEmpty(config.export_file_path)) {
-            openSetting(null);
-            return;
-        }
-        
         TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
+        }
+        
+        if (StringHelper.isNullOrEmpty(config.export_file_path) || !new File(config.export_file_path).exists()) {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("选择保存文件的文件夹");
+            File file = chooser.showDialog(stage);
+            if (file == null) {
+                return;
+            }
+            config.export_file_path = file.getAbsolutePath();
         }
         
         IPackage target = null;
@@ -363,14 +372,19 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     @FXML
     protected void exportImage(ActionEvent event) {
-        if (StringHelper.isNullOrEmpty(config.export_image_path)) {
-            openSetting(null);
-            return;
-        }
-        
         final TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
+        }
+        
+        if (StringHelper.isNullOrEmpty(config.export_image_path) || !new File(config.export_image_path).exists()) {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("选择保存图片的文件夹");
+            File file = chooser.showDialog(stage);
+            if (file == null) {
+                return;
+            }
+            config.export_image_path = file.getAbsolutePath();
         }
         
         IPackage target = null;

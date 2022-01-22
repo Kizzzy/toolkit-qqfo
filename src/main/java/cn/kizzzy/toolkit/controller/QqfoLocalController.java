@@ -16,7 +16,6 @@ import cn.kizzzy.qqfo.GsoFile;
 import cn.kizzzy.qqfo.GsoFileItem;
 import cn.kizzzy.qqfo.GsoFileItems;
 import cn.kizzzy.qqfo.PkgFile;
-import cn.kizzzy.qqfo.PkgFileItem;
 import cn.kizzzy.qqfo.QqfoConfig;
 import cn.kizzzy.qqfo.display.Display;
 import cn.kizzzy.qqfo.display.DisplayContext;
@@ -51,6 +50,7 @@ import javafx.scene.control.TreeView;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 
+import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -75,7 +75,7 @@ abstract class QqfoViewBase extends AbstractView {
     protected CheckBox lock_tab;
     
     @FXML
-    protected TreeView<Node<PkgFileItem>> tree_view;
+    protected TreeView<Node> tree_view;
     
     @FXML
     protected DisplayTabView display_tab;
@@ -106,10 +106,10 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     protected ISettingDialogFactory dialogFactory;
     
     protected IPackage vfs;
-    protected ITree<PkgFileItem> tree;
+    protected ITree tree;
     
     protected Display display = new Display();
-    protected TreeItem<Node<PkgFileItem>> dummyTreeItem;
+    protected TreeItem<Node> dummyTreeItem;
     
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -121,9 +121,13 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         
         JavafxHelper.initContextMenu(tree_view, () -> stage.getScene().getWindow(), new MenuItemArg[]{
             new MenuItemArg(0, "设置", this::openSetting),
-            new MenuItemArg(1, "加载PKG", this::loadPackage),
-            new MenuItemArg(2, "导出/文件", this::exportFile),
-            new MenuItemArg(2, "导出/图片", this::exportImage),
+            new MenuItemArg(1, "加载PKG", this::loadPkg),
+            new MenuItemArg(2, "导出/文件", event -> exportFile(false)),
+            new MenuItemArg(2, "导出/文件(递归)", event -> exportFile(true)),
+            new MenuItemArg(2, "导出/打开文件目录", this::openFileExportFolder),
+            new MenuItemArg(2, "导出/图片", event -> exportImage(false)),
+            new MenuItemArg(2, "导出/图片(递归)", event -> exportImage(true)),
+            new MenuItemArg(2, "导出/打开图片目录", this::openImageExportFolder),
             new MenuItemArg(3, "复制路径", this::copyPath),
         });
         
@@ -181,7 +185,7 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         });
     }
     
-    protected void loadPackage(ActionEvent actionEvent) {
+    protected void loadPkg(ActionEvent actionEvent) {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("选择pkg文件");
         if (StringHelper.isNotNullAndEmpty(config.data_path)) {
@@ -220,8 +224,8 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         Platform.runLater(() -> {
             dummyTreeItem.getChildren().clear();
             
-            final List<Node<PkgFileItem>> nodes = tree.listNode(0);
-            for (Node<PkgFileItem> node : nodes) {
+            final List<Node> nodes = tree.listNode(0);
+            for (Node node : nodes) {
                 dummyTreeItem.getChildren().add(new TreeItem<>(node));
             }
         });
@@ -235,19 +239,19 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         return null;
     }
     
-    protected void onSelectItem(Observable observable, TreeItem<Node<PkgFileItem>> oldValue, TreeItem<Node<PkgFileItem>> newValue) {
+    protected void onSelectItem(Observable observable, TreeItem<Node> oldValue, TreeItem<Node> newValue) {
         if (newValue != null) {
-            Node<PkgFileItem> folder = newValue.getValue();
-            Leaf<PkgFileItem> thumbs = null;
+            Node folder = newValue.getValue();
+            Leaf thumbs = null;
             
             if (folder.leaf) {
-                thumbs = (Leaf<PkgFileItem>) folder;
+                thumbs = (Leaf) folder;
             } else {
                 newValue.getChildren().clear();
                 
-                Iterable<Node<PkgFileItem>> list = folder.children.values();
-                for (Node<PkgFileItem> temp : list) {
-                    TreeItem<Node<PkgFileItem>> child = new TreeItem<>(temp);
+                Iterable<Node> list = folder.children.values();
+                for (Node temp : list) {
+                    TreeItem<Node> child = new TreeItem<>(temp);
                     newValue.getChildren().add(child);
                 }
                 newValue.getChildren().sort(comparator);
@@ -315,12 +319,12 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         playThis = !playThis;
         ((Button) event.getSource()).setText(playThis ? "暂停播放" : "连续播放");
         if (playThis) {
-            TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
+            TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
             
             List<Display> displays = new ArrayList<>();
             
-            List<Leaf<PkgFileItem>> fileList = tree.listLeaf(selected.getValue());
-            for (Leaf<PkgFileItem> file : fileList) {
+            List<Leaf> fileList = tree.listLeaf(selected.getValue());
+            for (Leaf file : fileList) {
                 displays.add(DisplayHelper.newDisplay(this, file.path));
             }
             
@@ -335,8 +339,34 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     }
     
     @FXML
-    protected void exportFile(ActionEvent event) {
-        TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
+    protected void openFileExportFolder(ActionEvent actionEvent) {
+        new Thread(() -> {
+            try {
+                if (StringHelper.isNotNullAndEmpty(config.export_file_path)) {
+                    Desktop.getDesktop().open(new File(config.export_file_path));
+                }
+            } catch (Exception e) {
+                LogHelper.error("open export folder error", e);
+            }
+        }).start();
+    }
+    
+    @FXML
+    protected void openImageExportFolder(ActionEvent actionEvent) {
+        new Thread(() -> {
+            try {
+                if (StringHelper.isNotNullAndEmpty(config.export_image_path)) {
+                    Desktop.getDesktop().open(new File(config.export_image_path));
+                }
+            } catch (Exception e) {
+                LogHelper.error("open export folder error", e);
+            }
+        }).start();
+    }
+    
+    @FXML
+    protected void exportFile(boolean recursively) {
+        TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
         }
@@ -352,10 +382,10 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
         
         IPackage target = null;
-        Node<PkgFileItem> node = selected.getValue();
+        Node node = selected.getValue();
         
-        List<Leaf<PkgFileItem>> list = tree.listLeaf(node, true);
-        for (Leaf<PkgFileItem> leaf : list) {
+        List<Leaf> list = tree.listLeaf(node, true);
+        for (Leaf leaf : list) {
             try {
                 if (target == null) {
                     String pkgName = leaf.pack.replace(".pkg", "");
@@ -371,8 +401,8 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     }
     
     @FXML
-    protected void exportImage(ActionEvent event) {
-        final TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
+    protected void exportImage(boolean recursively) {
+        final TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
         }
@@ -388,10 +418,10 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
         
         IPackage target = null;
-        Node<PkgFileItem> node = selected.getValue();
+        Node node = selected.getValue();
         
-        List<Leaf<PkgFileItem>> list = tree.listLeaf(selected.getValue(), true);
-        for (Leaf<PkgFileItem> leaf : list) {
+        List<Leaf> list = tree.listLeaf(selected.getValue(), true);
+        for (Leaf leaf : list) {
             try {
                 if (target == null) {
                     String pkgName = leaf.pack.replace(".pkg", "");
@@ -424,11 +454,11 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     }
     
     protected void copyPath(ActionEvent actionEvent) {
-        TreeItem<Node<PkgFileItem>> selected = tree_view.getSelectionModel().getSelectedItem();
+        TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected != null) {
-            Node<PkgFileItem> node = selected.getValue();
+            Node node = selected.getValue();
             if (node.leaf) {
-                Leaf<PkgFileItem> leaf = (Leaf<PkgFileItem>) node;
+                Leaf leaf = (Leaf) node;
                 
                 String path = leaf.path.replace("\\", "\\\\");
                 StringSelection selection = new StringSelection(path);
@@ -438,7 +468,7 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
     }
     
-    private TreeItem<Node<PkgFileItem>> filterRoot;
+    private TreeItem<Node> filterRoot;
     
     @FXML
     protected void onFilter(ActionEvent event) {
@@ -454,14 +484,14 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
         
         if (filterRoot == null) {
-            filterRoot = new TreeItem<>(new Node<>(0, "[Filter]"));
+            filterRoot = new TreeItem<>(new Node(0, "[Filter]"));
             dummyTreeItem.getChildren().add(filterRoot);
         }
         
         filterRoot.getChildren().clear();
         
-        List<Node<PkgFileItem>> list = tree.listNodeByRegex(regex);
-        for (Node<PkgFileItem> folder : list) {
+        List<Node> list = tree.listNodeByRegex(regex);
+        for (Node folder : list) {
             filterRoot.getChildren().add(new TreeItem<>(folder));
         }
         

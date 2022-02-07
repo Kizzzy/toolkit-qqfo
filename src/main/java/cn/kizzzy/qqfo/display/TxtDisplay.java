@@ -7,6 +7,7 @@ import cn.kizzzy.javafx.display.DisplayType;
     "ini",
     "xml",
     "lua",
+    "eff",
 })
 public class TxtDisplay extends Display {
     

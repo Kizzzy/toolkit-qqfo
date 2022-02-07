@@ -28,6 +28,7 @@ import cn.kizzzy.vfs.ITree;
 import cn.kizzzy.vfs.handler.BufferedImageHandler;
 import cn.kizzzy.vfs.handler.JsonFileHandler;
 import cn.kizzzy.vfs.handler.PkgFileHandler;
+import cn.kizzzy.vfs.handler.StringFileHandler;
 import cn.kizzzy.vfs.pack.FilePackage;
 import cn.kizzzy.vfs.pack.QqfoPackage;
 import cn.kizzzy.vfs.tree.IdGenerator;
@@ -55,6 +56,7 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
@@ -122,13 +124,14 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         JavafxHelper.initContextMenu(tree_view, () -> stage.getScene().getWindow(), new MenuItemArg[]{
             new MenuItemArg(0, "设置", this::openSetting),
             new MenuItemArg(1, "加载PKG", this::loadPkg),
-            new MenuItemArg(2, "导出/文件", event -> exportFile(false)),
-            new MenuItemArg(2, "导出/文件(递归)", event -> exportFile(true)),
-            new MenuItemArg(2, "导出/打开文件目录", this::openFileExportFolder),
-            new MenuItemArg(2, "导出/图片", event -> exportImage(false)),
-            new MenuItemArg(2, "导出/图片(递归)", event -> exportImage(true)),
-            new MenuItemArg(2, "导出/打开图片目录", this::openImageExportFolder),
-            new MenuItemArg(3, "复制路径", this::copyPath),
+            new MenuItemArg(2, "打开/根目录", this::openFolderQqfoData),
+            new MenuItemArg(2, "打开/文件目录", this::openFolderExportFile),
+            new MenuItemArg(2, "打开/图片目录", this::openFolderExportImage),
+            new MenuItemArg(3, "导出/文件", event -> exportFile(false)),
+            new MenuItemArg(3, "导出/文件(递归)", event -> exportFile(true)),
+            new MenuItemArg(3, "导出/图片", event -> exportImage(false)),
+            new MenuItemArg(3, "导出/图片(递归)", event -> exportImage(true)),
+            new MenuItemArg(4, "复制路径", this::copyPath),
         });
         
         addListener(DisplayType.TOAST_TIPS, this::toastTips);
@@ -185,52 +188,6 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         });
     }
     
-    protected void loadPkg(ActionEvent actionEvent) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("选择pkg文件");
-        if (StringHelper.isNotNullAndEmpty(config.data_path)) {
-            File lastFolder = new File(config.data_path);
-            if (lastFolder.exists()) {
-                chooser.setInitialDirectory(lastFolder);
-            }
-        }
-        chooser.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("PKG", "*.pkg")
-        );
-        File file = chooser.showOpenDialog(stage);
-        if (file != null && file.getAbsolutePath().endsWith(".pkg")) {
-            config.data_path = file.getParent();
-            
-            new Thread(() -> {
-                try {
-                    loadPkgImpl(file);
-                } catch (Exception e) {
-                    LogHelper.error("load pkg error", e);
-                }
-            }).start();
-        }
-    }
-    
-    private void loadPkgImpl(File file) {
-        IPackage iPackage = new FilePackage(file.getParent());
-        iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
-        
-        PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
-        
-        tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
-        
-        vfs = new QqfoPackage(file.getParent(), tree);
-        
-        Platform.runLater(() -> {
-            dummyTreeItem.getChildren().clear();
-            
-            final List<Node> nodes = tree.listNode(0);
-            for (Node node : nodes) {
-                dummyTreeItem.getChildren().add(new TreeItem<>(node));
-            }
-        });
-    }
-    
     @Override
     public <T> T load(String path, Class<T> clazz) {
         if (vfs != null) {
@@ -269,14 +226,6 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     protected void onChangeLayer(Observable observable, Number oldValue, Number newValue) {
         display.select(newValue.intValue());
-    }
-    
-    @FXML
-    protected void openSetting(ActionEvent actionEvent) {
-        if (dialogFactory == null) {
-            dialogFactory = new SettingDialogFactory(stage);
-        }
-        dialogFactory.show(config);
     }
     
     @FXML
@@ -338,34 +287,85 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
     }
     
-    @FXML
-    protected void openFileExportFolder(ActionEvent actionEvent) {
-        new Thread(() -> {
-            try {
-                if (StringHelper.isNotNullAndEmpty(config.export_file_path)) {
-                    Desktop.getDesktop().open(new File(config.export_file_path));
-                }
-            } catch (Exception e) {
-                LogHelper.error("open export folder error", e);
-            }
-        }).start();
+    private void openSetting(ActionEvent actionEvent) {
+        if (dialogFactory == null) {
+            dialogFactory = new SettingDialogFactory(stage);
+        }
+        dialogFactory.show(config);
     }
     
-    @FXML
-    protected void openImageExportFolder(ActionEvent actionEvent) {
-        new Thread(() -> {
-            try {
-                if (StringHelper.isNotNullAndEmpty(config.export_image_path)) {
-                    Desktop.getDesktop().open(new File(config.export_image_path));
-                }
-            } catch (Exception e) {
-                LogHelper.error("open export folder error", e);
+    private void loadPkg(ActionEvent actionEvent) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("选择pkg文件");
+        if (StringHelper.isNotNullAndEmpty(config.data_path)) {
+            File lastFolder = new File(config.data_path);
+            if (lastFolder.exists()) {
+                chooser.setInitialDirectory(lastFolder);
             }
-        }).start();
+        }
+        chooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("PKG", "*.pkg")
+        );
+        File file = chooser.showOpenDialog(stage);
+        if (file != null && file.getAbsolutePath().endsWith(".pkg")) {
+            config.data_path = file.getParent();
+            
+            new Thread(() -> {
+                try {
+                    loadPkgImpl(file);
+                } catch (Exception e) {
+                    LogHelper.error("load pkg error", e);
+                }
+            }).start();
+        }
     }
     
-    @FXML
-    protected void exportFile(boolean recursively) {
+    private void loadPkgImpl(File file) {
+        IPackage iPackage = new FilePackage(file.getParent());
+        iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
+        
+        PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
+        
+        tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
+        
+        vfs = new QqfoPackage(file.getParent(), tree);
+        vfs.getHandlerKvs().put(String.class, new StringFileHandler(Charset.forName("GB2312")));
+        
+        Platform.runLater(() -> {
+            dummyTreeItem.getChildren().clear();
+            
+            final List<Node> nodes = tree.listNode(0);
+            for (Node node : nodes) {
+                dummyTreeItem.getChildren().add(new TreeItem<>(node));
+            }
+        });
+    }
+    
+    private void openFolderQqfoData(ActionEvent actionEvent) {
+        openFolderImpl(config.data_path);
+    }
+    
+    private void openFolderExportFile(ActionEvent actionEvent) {
+        openFolderImpl(config.export_file_path);
+    }
+    
+    private void openFolderExportImage(ActionEvent actionEvent) {
+        openFolderImpl(config.export_image_path);
+    }
+    
+    private void openFolderImpl(String filePath) {
+        if (StringHelper.isNotNullAndEmpty(filePath)) {
+            new Thread(() -> {
+                try {
+                    Desktop.getDesktop().open(new File(filePath));
+                } catch (Exception e) {
+                    LogHelper.error(String.format("open folder error, %s", filePath), e);
+                }
+            }).start();
+        }
+    }
+    
+    private void exportFile(boolean recursively) {
         TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
@@ -400,8 +400,7 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
     }
     
-    @FXML
-    protected void exportImage(boolean recursively) {
+    private void exportImage(boolean recursively) {
         final TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected == null) {
             return;
@@ -453,7 +452,7 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
         }
     }
     
-    protected void copyPath(ActionEvent actionEvent) {
+    private void copyPath(ActionEvent actionEvent) {
         TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
         if (selected != null) {
             Node node = selected.getValue();

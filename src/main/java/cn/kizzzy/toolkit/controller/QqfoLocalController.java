@@ -15,26 +15,26 @@ import cn.kizzzy.javafx.setting.SettingDialogFactory;
 import cn.kizzzy.qqfo.GsoFile;
 import cn.kizzzy.qqfo.GsoFileItem;
 import cn.kizzzy.qqfo.GsoFileItems;
-import cn.kizzzy.qqfo.PkgFile;
 import cn.kizzzy.qqfo.QqfoConfig;
 import cn.kizzzy.qqfo.display.Display;
 import cn.kizzzy.qqfo.display.DisplayContext;
 import cn.kizzzy.qqfo.display.DisplayHelper;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
+import cn.kizzzy.tencent.IdxFile;
 import cn.kizzzy.toolkit.extrator.PlayThisTask;
 import cn.kizzzy.toolkit.view.AbstractView;
 import cn.kizzzy.vfs.IPackage;
 import cn.kizzzy.vfs.ITree;
 import cn.kizzzy.vfs.handler.BufferedImageHandler;
+import cn.kizzzy.vfs.handler.IdxFileHandler;
 import cn.kizzzy.vfs.handler.JsonFileHandler;
-import cn.kizzzy.vfs.handler.PkgFileHandler;
 import cn.kizzzy.vfs.handler.StringFileHandler;
 import cn.kizzzy.vfs.pack.FilePackage;
 import cn.kizzzy.vfs.pack.QqfoPackage;
 import cn.kizzzy.vfs.tree.IdGenerator;
+import cn.kizzzy.vfs.tree.IdxTreeBuilder;
 import cn.kizzzy.vfs.tree.Leaf;
 import cn.kizzzy.vfs.tree.Node;
-import cn.kizzzy.vfs.tree.QqfoTreeBuilder;
 import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.event.ActionEvent;
@@ -322,11 +322,11 @@ public class QqfoLocalController extends QqfoViewBase implements DisplayContext,
     
     private void loadPkgImpl(File file) {
         IPackage iPackage = new FilePackage(file.getParent());
-        iPackage.getHandlerKvs().put(PkgFile.class, new PkgFileHandler());
+        iPackage.getHandlerKvs().put(IdxFile.class, new IdxFileHandler());
         
-        PkgFile pkgFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), PkgFile.class);
+        IdxFile idxFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), IdxFile.class);
         
-        tree = new QqfoTreeBuilder(pkgFile, new IdGenerator()).build();
+        tree = new IdxTreeBuilder(idxFile, new IdGenerator()).build();
         
         vfs = new QqfoPackage(file.getParent(), tree);
         vfs.getHandlerKvs().put(String.class, new StringFileHandler(Charset.forName("GB2312")));

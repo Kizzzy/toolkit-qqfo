@@ -1,104 +1,57 @@
 package cn.kizzzy.qqfo.display;
 
-import cn.kizzzy.helper.LogHelper;
-import cn.kizzzy.javafx.display.DisplayParam;
+import cn.kizzzy.javafx.display.Display;
+import cn.kizzzy.javafx.display.DisplayAAA;
+import cn.kizzzy.javafx.display.DisplayAttribute;
+import cn.kizzzy.javafx.display.DisplayFrame;
+import cn.kizzzy.javafx.display.DisplayTrack;
+import cn.kizzzy.javafx.display.DisplayTracks;
 import cn.kizzzy.javafx.display.DisplayType;
 import cn.kizzzy.qqfo.GsnFile;
 import cn.kizzzy.qqfo.GsnFrame;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
+import cn.kizzzy.vfs.IPackage;
 
 import java.awt.image.BufferedImage;
-import java.util.Collections;
 
-@DisplayFlag(suffix = {
+@DisplayAttribute(suffix = {
     "gsn",
 })
-public class GsnDisplay extends Display {
+public class GsnDisplay extends Display<IPackage> {
     
-    private int index;
-    private int total;
-    
-    private String[] infos;
-    private DisplayParam[] params;
-    
-    public GsnDisplay(DisplayContext context, String path) {
+    public GsnDisplay(IPackage context, String path) {
         super(context, path);
     }
     
     @Override
-    public void init() {
+    public DisplayAAA load() {
         GsnFile file = context.load(path, GsnFile.class);
+        if (file == null) {
+            return null;
+        }
         
-        index = 0;
-        total = file.count;
-        
-        infos = new String[file.count];
-        params = new DisplayParam[file.count];
-        
+        DisplayTrack track = new DisplayTrack();
         int i = 0;
-        for (GsnFrame frame : file.frames) {
-            if (frame != null) {
-                
-                infos[i] = String.format(
-                    "Show Image(%d/%d) [%d * %d * %s]",
-                    i + 1,
-                    file.count,
-                    frame.getWidth(),
-                    frame.getHeight(),
-                    retrieveImageType(frame.getType())
-                );
-                
-                BufferedImage image = QqfoImgHelper.toImage(frame);
-                wrapperImage(image);
-                
-                params[i] = new DisplayParam.Builder()
-                    .setX(200)
-                    .setY(200)
-                    .setWidth(frame.getWidth())
-                    .setHeight(frame.getHeight())
-                    .setImage(image)
-                    .build();
-                
-                i++;
+        for (GsnFrame gsnFrame : file.frames) {
+            if (gsnFrame != null) {
+                BufferedImage image = QqfoImgHelper.toImage(gsnFrame);
+                if (image != null) {
+                    DisplayFrame frame = new DisplayFrame();
+                    frame.x = 200;
+                    frame.y = 200;
+                    frame.width = gsnFrame.getWidth();
+                    frame.height = gsnFrame.getHeight();
+                    frame.image = image;
+                    frame.time = 167 * (i++);
+                    frame.extra = String.format("%02d/%02d", i, file.count);
+                    
+                    track.frames.add(frame);
+                }
             }
         }
         
-        displayImpl();
-    }
-    
-    @Override
-    public void prev() {
-        index--;
-        if (index < 0) {
-            index = total - 1;
-        }
-        
-        displayImpl();
-    }
-    
-    @Override
-    public void next() {
-        index++;
-        if (index >= total) {
-            index = 0;
-        }
-        
-        displayImpl();
-    }
-    
-    @Override
-    public void play() {
-        next();
-    }
-    
-    protected void displayImpl() {
-        try {
-            context.notifyListener(DisplayType.TOAST_TIPS, infos[index]);
-            if (params[index] != null) {
-                context.notifyListener(DisplayType.SHOW_IMAGE, Collections.singletonList(params[index]));
-            }
-        } catch (Exception e) {
-            LogHelper.error(null, e);
-        }
+        DisplayTracks tracks = new DisplayTracks();
+        tracks.tracks.add(track);
+        return new DisplayAAA(DisplayType.SHOW_IMAGE, tracks);
     }
 }

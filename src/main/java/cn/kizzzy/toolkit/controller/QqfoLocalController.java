@@ -3,12 +3,12 @@ package cn.kizzzy.toolkit.controller;
 import cn.kizzzy.helper.FileHelper;
 import cn.kizzzy.helper.LogHelper;
 import cn.kizzzy.helper.StringHelper;
+import cn.kizzzy.javafx.StageHelper;
 import cn.kizzzy.javafx.common.JavafxHelper;
 import cn.kizzzy.javafx.common.MenuItemArg;
 import cn.kizzzy.javafx.display.DisplayOperator;
 import cn.kizzzy.javafx.display.DisplayTabView;
-import cn.kizzzy.javafx.setting.ISettingDialogFactory;
-import cn.kizzzy.javafx.setting.SettingDialogFactory;
+import cn.kizzzy.javafx.setting.SettingDialog;
 import cn.kizzzy.qqfo.GsoFile;
 import cn.kizzzy.qqfo.GsoFileItem;
 import cn.kizzzy.qqfo.GsoFileItems;
@@ -98,7 +98,8 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
     
     protected IPackage userVfs;
     protected QqfoConfig config;
-    protected ISettingDialogFactory dialogFactory;
+    private StageHelper stageHelper
+        = new StageHelper();
     
     protected IPackage vfs;
     protected ITree tree;
@@ -114,6 +115,8 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
         
         config = userVfs.load(CONFIG_PATH, QqfoConfig.class);
         config = config != null ? config : new QqfoConfig();
+    
+        stageHelper.addFactory(SettingDialog::new, SettingDialog.class);
         
         JavafxHelper.initContextMenu(tree_view, () -> stage.getScene().getWindow(), new MenuItemArg[]{
             new MenuItemArg(0, "设置", this::openSetting),
@@ -177,10 +180,10 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
     }
     
     private void openSetting(ActionEvent actionEvent) {
-        if (dialogFactory == null) {
-            dialogFactory = new SettingDialogFactory(stage);
-        }
-        dialogFactory.show(config);
+        SettingDialog.Args args = new SettingDialog.Args();
+        args.target = config;
+        
+        stageHelper.show(stage, args, SettingDialog.class);
     }
     
     private void loadPkg(ActionEvent actionEvent) {

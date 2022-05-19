@@ -22,6 +22,7 @@ import cn.kizzzy.vfs.handler.BufferedImageHandler;
 import cn.kizzzy.vfs.handler.IdxFileHandler;
 import cn.kizzzy.vfs.handler.JsonFileHandler;
 import cn.kizzzy.vfs.handler.StringFileHandler;
+import cn.kizzzy.vfs.pack.CombinePackage;
 import cn.kizzzy.vfs.pack.FilePackage;
 import cn.kizzzy.vfs.pack.QqfoPackage;
 import cn.kizzzy.vfs.tree.IdGenerator;
@@ -34,10 +35,7 @@ import javafx.beans.Observable;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
@@ -58,16 +56,7 @@ import java.util.regex.Pattern;
 abstract class QqfoViewBase extends AbstractView {
     
     @FXML
-    protected ChoiceBox<String> show_choice;
-    
-    @FXML
     protected TextField filterValue;
-    
-    @FXML
-    protected CheckBox include_leaf;
-    
-    @FXML
-    protected CheckBox lock_tab;
     
     @FXML
     protected TreeView<Node> tree_view;
@@ -76,14 +65,11 @@ abstract class QqfoViewBase extends AbstractView {
     protected DisplayTabView display_tab;
     
     @FXML
-    protected ProgressBar progress_bar;
-    
-    @FXML
     protected Label tips;
     
     @Override
     public String getName() {
-        return "QqfoDisplayer";
+        return "Qqfo-Display";
     }
 }
 
@@ -91,22 +77,24 @@ abstract class QqfoViewBase extends AbstractView {
 @PluginParameter(url = "/fxml/toolkit/qqfo_local_view.fxml", title = "QQ幻想(解包)")
 public class QqfoLocalController extends QqfoViewBase implements Initializable {
     
-    protected static final String CONFIG_PATH = "qqfo/local.config";
+    private static final String CONFIG_PATH = "qqfo/local.config";
     
-    protected static final Comparator<TreeItem<Node>> comparator
+    private static final Comparator<TreeItem<Node>> comparator
         = Comparator.comparing(TreeItem<Node>::getValue, new NodeComparator());
     
-    protected IPackage userVfs;
-    protected QqfoConfig config;
-    private StageHelper stageHelper
+    private final StageHelper stageHelper
         = new StageHelper();
     
-    protected IPackage vfs;
-    protected ITree tree;
+    private IPackage userVfs;
+    private QqfoConfig config;
     
-    protected DisplayOperator<IPackage> displayer;
+    private CombinePackage vfs;
+    private IdGenerator idGenerator;
     
-    protected TreeItem<Node> dummyTreeItem;
+    private DisplayOperator<IPackage> displayer;
+    
+    private TreeItem<Node> dummyRoot;
+    private TreeItem<Node> filterRoot;
     
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -115,7 +103,7 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
         
         config = userVfs.load(CONFIG_PATH, QqfoConfig.class);
         config = config != null ? config : new QqfoConfig();
-    
+        
         stageHelper.addFactory(SettingDialog::new, SettingDialog.class);
         
         JavafxHelper.initContextMenu(tree_view, () -> stage.getScene().getWindow(), new MenuItemArg[]{
@@ -126,28 +114,30 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
             new MenuItemArg(2, "打开/图片目录", this::openFolderExportImage),
             new MenuItemArg(3, "导出/文件", event -> exportFile(false)),
             new MenuItemArg(3, "导出/文件(递归)", event -> exportFile(true)),
-            new MenuItemArg(3, "导出/图片", event -> exportImage(false)),
-            new MenuItemArg(3, "导出/图片(递归)", event -> exportImage(true)),
+            new MenuItemArg(3, "导出/图片", event -> exportImage(false, false)),
+            new MenuItemArg(3, "导出/图片(递归)", event -> exportImage(true, false)),
+            new MenuItemArg(3, "导出/图片(等尺寸)", event -> exportImage(false, true)),
+            new MenuItemArg(3, "导出/图片(等尺寸)(递归)", event -> exportImage(true, true)),
             new MenuItemArg(4, "复制路径", this::copyPath),
         });
         
-        dummyTreeItem = new TreeItem<>();
-        tree_view.setRoot(dummyTreeItem);
+        dummyRoot = new TreeItem<>();
+        tree_view.setRoot(dummyRoot);
         tree_view.setShowRoot(false);
         tree_view.getSelectionModel().selectedItemProperty().addListener(this::onSelectItem);
         
-        lock_tab.selectedProperty().addListener((observable, oldValue, newValue) -> {
-            display_tab.setPin(newValue);
-        });
+        vfs = new CombinePackage();
+        idGenerator = new IdGenerator();
         
         displayer = new DisplayOperator<>("cn.kizzzy.qqfo.display", display_tab, IPackage.class);
         displayer.load();
+        displayer.setContext(vfs);
     }
     
     @Override
     public void stop() {
-        if (tree != null) {
-            tree.stop();
+        if (vfs != null) {
+            vfs.stop();
         }
         
         userVfs.save(CONFIG_PATH, config);
@@ -155,26 +145,50 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
         super.stop();
     }
     
-    protected void onSelectItem(Observable observable, TreeItem<Node> oldValue, TreeItem<Node> newValue) {
-        if (newValue != null) {
-            Node folder = newValue.getValue();
-            Leaf thumbs = null;
-            
-            if (folder.leaf) {
-                thumbs = (Leaf) folder;
+    @FXML
+    protected void onFilter(ActionEvent event) {
+        final String regex = filterValue.getText();
+        if (StringHelper.isNullOrEmpty(regex)) {
+            return;
+        }
+        
+        try {
+            Pattern.compile(regex);
+        } catch (Exception e) {
+            return;
+        }
+        
+        if (filterRoot == null) {
+            filterRoot = new TreeItem<>(new Node(-1, "[Filter]"));
+            dummyRoot.getChildren().add(filterRoot);
+        }
+        
+        filterRoot.getChildren().clear();
+        
+        List<Node> list = vfs.listNodeByRegex(regex);
+        for (Node folder : list) {
+            filterRoot.getChildren().add(new TreeItem<>(folder));
+        }
+        
+        filterRoot.getChildren().sort(comparator);
+    }
+    
+    private void onSelectItem(Observable observable, TreeItem<Node> oldValue, TreeItem<Node> newValue) {
+        Node node = newValue == null ? null : newValue.getValue();
+        if (node != null) {
+            if (node.leaf) {
+                Leaf leaf = (Leaf) node;
+                
+                displayer.display(leaf.path);
             } else {
                 newValue.getChildren().clear();
                 
-                Iterable<Node> list = folder.children.values();
+                Iterable<Node> list = vfs.listNode(node.id, false);
                 for (Node temp : list) {
                     TreeItem<Node> child = new TreeItem<>(temp);
                     newValue.getChildren().add(child);
                 }
                 newValue.getChildren().sort(comparator);
-            }
-            
-            if (thumbs != null) {
-                displayer.display(thumbs.path);
             }
         }
     }
@@ -195,9 +209,11 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
                 chooser.setInitialDirectory(lastFolder);
             }
         }
+        
         chooser.getExtensionFilters().addAll(
             new FileChooser.ExtensionFilter("PKG", "*.pkg")
         );
+        
         File file = chooser.showOpenDialog(stage);
         if (file != null && file.getAbsolutePath().endsWith(".pkg")) {
             config.data_path = file.getParent();
@@ -213,24 +229,35 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
     }
     
     private void loadPkgImpl(File file) {
-        IPackage iPackage = new FilePackage(file.getParent());
-        iPackage.getHandlerKvs().put(IdxFile.class, new IdxFileHandler());
+        IPackage dataVfs = new FilePackage(file.getParent());
+        dataVfs.getHandlerKvs().put(IdxFile.class, new IdxFileHandler());
         
-        IdxFile idxFile = iPackage.load(FileHelper.getName(file.getAbsolutePath()), IdxFile.class);
+        IdxFile idxFile = dataVfs.load(FileHelper.getName(file.getAbsolutePath()), IdxFile.class);
+        if (idxFile == null) {
+            return;
+        }
         
-        tree = new IdxTreeBuilder(idxFile, new IdGenerator()).build();
-        
-        vfs = new QqfoPackage(file.getParent(), tree);
+        ITree tree = new IdxTreeBuilder(idxFile, idGenerator).build();
+        IPackage vfs = new QqfoPackage(file.getParent(), tree);
         vfs.getHandlerKvs().put(String.class, new StringFileHandler(Charset.forName("GB2312")));
         
-        displayer.setContext(vfs);
+        doAfterLoadVfs(vfs);
+    }
+    
+    private void doAfterLoadVfs(IPackage _vfs) {
+        vfs.addPackage(_vfs);
         
         Platform.runLater(() -> {
-            dummyTreeItem.getChildren().clear();
+            dummyRoot.getChildren().clear();
             
-            final List<Node> nodes = tree.listNode(0);
+            final List<Node> nodes = vfs.listNode(0, false);
             for (Node node : nodes) {
-                dummyTreeItem.getChildren().add(new TreeItem<>(node));
+                TreeItem<Node> child = new TreeItem<>(node);
+                dummyRoot.getChildren().add(child);
+            }
+            
+            if (filterRoot != null) {
+                dummyRoot.getChildren().add(filterRoot);
             }
         });
     }
@@ -247,24 +274,19 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
         openFolderImpl(config.export_image_path);
     }
     
-    private void openFolderImpl(String filePath) {
-        if (StringHelper.isNotNullAndEmpty(filePath)) {
+    private void openFolderImpl(String path) {
+        if (StringHelper.isNotNullAndEmpty(path)) {
             new Thread(() -> {
                 try {
-                    Desktop.getDesktop().open(new File(filePath));
+                    Desktop.getDesktop().open(new File(path));
                 } catch (Exception e) {
-                    LogHelper.error(String.format("open folder error, %s", filePath), e);
+                    LogHelper.error(String.format("open folder error, %s", path), e);
                 }
             }).start();
         }
     }
     
     private void exportFile(boolean recursively) {
-        TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        
         if (StringHelper.isNullOrEmpty(config.export_file_path) || !new File(config.export_file_path).exists()) {
             DirectoryChooser chooser = new DirectoryChooser();
             chooser.setTitle("选择保存文件的文件夹");
@@ -275,10 +297,15 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
             config.export_file_path = file.getAbsolutePath();
         }
         
-        IPackage target = null;
-        Node node = selected.getValue();
+        TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
+        Node node = selected == null ? null : selected.getValue();
+        if (node == null) {
+            return;
+        }
         
-        List<Leaf> list = tree.listLeaf(node, true);
+        IPackage target = null;
+        
+        List<Leaf> list = vfs.listLeaf(node, recursively);
         for (Leaf leaf : list) {
             try {
                 if (target == null) {
@@ -287,19 +314,16 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
                 }
                 
                 byte[] data = vfs.load(leaf.path, byte[].class);
-                target.save(leaf.path, data);
+                if (data != null) {
+                    target.save(leaf.path, data);
+                }
             } catch (Exception e) {
                 LogHelper.info(String.format("export file failed: %s", leaf.path), e);
             }
         }
     }
     
-    private void exportImage(boolean recursively) {
-        final TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        
+    private void exportImage(boolean recursively, boolean fixed) {
         if (StringHelper.isNullOrEmpty(config.export_image_path) || !new File(config.export_image_path).exists()) {
             DirectoryChooser chooser = new DirectoryChooser();
             chooser.setTitle("选择保存图片的文件夹");
@@ -310,14 +334,19 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
             config.export_image_path = file.getAbsolutePath();
         }
         
-        IPackage target = null;
-        Node node = selected.getValue();
+        final TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
+        Node node = selected == null ? null : selected.getValue();
+        if (node == null) {
+            return;
+        }
         
-        List<Leaf> list = tree.listLeaf(selected.getValue(), true);
+        IPackage target = null;
+        
+        List<Leaf> list = vfs.listLeaf(node, recursively);
         for (Leaf leaf : list) {
             try {
                 if (target == null) {
-                    String pkgName = leaf.pack.replace(".pkg", "");
+                    String pkgName = leaf.pack.replace(".pkg", fixed ? "-fixed" : "");
                     target = new FilePackage(config.export_image_path + "/" + pkgName);
                     target.getHandlerKvs().put(BufferedImage.class, new BufferedImageHandler());
                 }
@@ -330,7 +359,7 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
                         for (GsoFileItems items : file.items) {
                             for (GsoFileItem item : items.items) {
                                 if (item != null) {
-                                    BufferedImage image = QqfoImgHelper.toImage(item);
+                                    BufferedImage image = fixed ? QqfoImgHelper.toImageFix(item) : QqfoImgHelper.toImage(item);
                                     if (image != null) {
                                         String fullPath = leaf.path.replace(".gso", String.format("-%02d-%02d.png", item.i, item.j));
                                         target.save(fullPath, image);
@@ -348,46 +377,13 @@ public class QqfoLocalController extends QqfoViewBase implements Initializable {
     
     private void copyPath(ActionEvent actionEvent) {
         TreeItem<Node> selected = tree_view.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            Node node = selected.getValue();
-            if (node.leaf) {
-                Leaf leaf = (Leaf) node;
-                
-                String path = leaf.path.replace("\\", "\\\\");
-                StringSelection selection = new StringSelection(path);
-                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(selection, selection);
-            }
+        Node node = selected == null ? null : selected.getValue();
+        if (node != null && node.leaf) {
+            Leaf leaf = (Leaf) node;
+            
+            String path = leaf.path.replace("\\", "\\\\");
+            StringSelection selection = new StringSelection(path);
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
         }
-    }
-    
-    private TreeItem<Node> filterRoot;
-    
-    @FXML
-    protected void onFilter(ActionEvent event) {
-        final String regex = filterValue.getText();
-        if (StringHelper.isNullOrEmpty(regex)) {
-            return;
-        }
-        
-        try {
-            Pattern.compile(regex);
-        } catch (Exception e) {
-            return;
-        }
-        
-        if (filterRoot == null) {
-            filterRoot = new TreeItem<>(new Node(0, "[Filter]"));
-            dummyTreeItem.getChildren().add(filterRoot);
-        }
-        
-        filterRoot.getChildren().clear();
-        
-        List<Node> list = tree.listNodeByRegex(regex);
-        for (Node folder : list) {
-            filterRoot.getChildren().add(new TreeItem<>(folder));
-        }
-        
-        filterRoot.getChildren().sort(comparator);
     }
 }

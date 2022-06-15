@@ -47,7 +47,7 @@ public class QqfoViewerExecutor extends AbstractViewerExecutor {
     @Override
     public void initialize(ViewerExecutorArgs args) {
         IPackage userVfs = args.getUserVfs();
-        userVfs.getHandlerKvs().put(QqfoConfig.class, new JsonFileHandler<>(QqfoConfig.class));
+        userVfs.addHandler(QqfoConfig.class, new JsonFileHandler<>(QqfoConfig.class));
         
         config = userVfs.load(CONFIG_PATH, QqfoConfig.class);
         config = config != null ? config : new QqfoConfig();
@@ -118,7 +118,7 @@ public class QqfoViewerExecutor extends AbstractViewerExecutor {
         IdGenerator idGenerator = args.getIdGenerator();
         
         IPackage dataVfs = new FilePackage(file.getParent());
-        dataVfs.getHandlerKvs().put(IdxFile.class, new IdxFileHandler());
+        dataVfs.addHandler(IdxFile.class, new IdxFileHandler());
         
         String path = FileHelper.getName(file.getAbsolutePath());
         IdxFile idxFile = dataVfs.load(path, IdxFile.class);
@@ -128,7 +128,7 @@ public class QqfoViewerExecutor extends AbstractViewerExecutor {
         
         ITree tree = new IdxTreeBuilder(idxFile, idGenerator).build();
         IPackage pkgVfs = new QqfoPackage(file.getParent(), tree);
-        pkgVfs.getHandlerKvs().put(String.class, new StringFileHandler(Charset.forName("GB2312")));
+        pkgVfs.addHandler(String.class, new StringFileHandler(Charset.forName("GB2312")));
         
         args.getObservable().setValue(new ViewerExecutorBinder(pkgVfs, this));
     }
@@ -213,7 +213,7 @@ public class QqfoViewerExecutor extends AbstractViewerExecutor {
                 if (target == null) {
                     String pkgName = leaf.pack.replace(".pkg", "");
                     target = new FilePackage(config.export_image_path + "/" + pkgName);
-                    target.getHandlerKvs().put(BufferedImage.class, new BufferedImageHandler());
+                    target.addHandler(BufferedImage.class, new BufferedImageHandler());
                 }
                 
                 if (leaf.path.contains(".gso")) {

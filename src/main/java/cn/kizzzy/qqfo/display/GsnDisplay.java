@@ -8,7 +8,6 @@ import cn.kizzzy.javafx.display.image.DisplayFrame;
 import cn.kizzzy.javafx.display.image.DisplayTrack;
 import cn.kizzzy.javafx.display.image.DisplayTracks;
 import cn.kizzzy.qqfo.GsnFile;
-import cn.kizzzy.qqfo.GsnFrame;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
 import cn.kizzzy.vfs.IPackage;
 
@@ -32,7 +31,7 @@ public class GsnDisplay extends Display<IPackage> {
         
         DisplayTrack track = new DisplayTrack();
         int i = 0;
-        for (GsnFrame gsnFrame : file.frames) {
+        for (GsnFile.GsnFrame gsnFrame : file.frames) {
             if (gsnFrame != null) {
                 BufferedImage image = QqfoImgHelper.toImage(gsnFrame);
                 if (image != null) {

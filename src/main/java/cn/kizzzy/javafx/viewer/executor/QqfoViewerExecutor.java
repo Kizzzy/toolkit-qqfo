@@ -10,8 +10,6 @@ import cn.kizzzy.javafx.viewer.ViewerExecutorArgs;
 import cn.kizzzy.javafx.viewer.ViewerExecutorAttribute;
 import cn.kizzzy.javafx.viewer.ViewerExecutorBinder;
 import cn.kizzzy.qqfo.GsoFile;
-import cn.kizzzy.qqfo.GsoFileItem;
-import cn.kizzzy.qqfo.GsoFileItems;
 import cn.kizzzy.qqfo.QqfoConfig;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
 import cn.kizzzy.qqfo.vfs.pack.QqfoPackage;
@@ -221,8 +219,8 @@ public class QqfoViewerExecutor extends AbstractViewerExecutor {
                     
                     GsoFile file = vfs.load(leaf.path, GsoFile.class);
                     if (file != null) {
-                        for (GsoFileItems items : file.items) {
-                            for (GsoFileItem item : items.items) {
+                        for (GsoFile.Entry entry : file.entries) {
+                            for (GsoFile.Item item : entry.items) {
                                 if (item != null) {
                                     BufferedImage image = fixed ? QqfoImgHelper.toImageFix(item) : QqfoImgHelper.toImage(item);
                                     if (image != null) {

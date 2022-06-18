@@ -8,8 +8,6 @@ import cn.kizzzy.javafx.display.image.DisplayFrame;
 import cn.kizzzy.javafx.display.image.DisplayTrack;
 import cn.kizzzy.javafx.display.image.DisplayTracks;
 import cn.kizzzy.qqfo.GsoFile;
-import cn.kizzzy.qqfo.GsoFileItem;
-import cn.kizzzy.qqfo.GsoFileItems;
 import cn.kizzzy.qqfo.helper.QqfoImgHelper;
 import cn.kizzzy.vfs.IPackage;
 
@@ -33,8 +31,8 @@ public class GsoDisplay extends Display<IPackage> {
         
         DisplayTrack track = new DisplayTrack();
         int i = 0;
-        for (GsoFileItems items : file.items) {
-            for (GsoFileItem item : items.items) {
+        for (GsoFile.Entry items : file.entries) {
+            for (GsoFile.Item item : items.items) {
                 if (item != null) {
                     BufferedImage image = QqfoImgHelper.toImage(item);
                     if (image != null) {
